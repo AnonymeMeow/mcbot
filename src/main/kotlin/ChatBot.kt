@@ -1,23 +1,19 @@
 package mcbot
 
 import kotlinx.serialization.Serializable
-import mcbot.Mcbot.permissionId
 import mcbot.Mcbot.reload
 import net.mamoe.mirai.console.command.*
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.register
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.unregister
 import net.mamoe.mirai.console.data.AutoSavePluginConfig
 import net.mamoe.mirai.console.data.value
-import net.mamoe.mirai.console.permission.AbstractPermitteeId
-import net.mamoe.mirai.console.permission.PermissionService
-import net.mamoe.mirai.console.permission.PermissionService.Companion.permit
 import net.mamoe.mirai.event.GlobalEventChannel
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.event.nextEvent
 import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
 
-object ChatBot {
+object ChatBot:Function(true) {
     object DataBase : AutoSavePluginConfig("ChatBotDataBase") {
         @Serializable
         data class GroupData(
@@ -51,15 +47,7 @@ object ChatBot {
         }
     }
 
-    val chatbotperm by lazy {
-        PermissionService.INSTANCE.register(
-            permissionId("chatbotpermission"),
-            "chatbotpermission",
-            Mcbot.parentPermission
-        )
-    }
-
-    object Remember : SimpleCommand(Mcbot, "remember", parentPermission = chatbotperm) {
+    object Remember : SimpleCommand(Mcbot, "remember", parentPermission = Mcbot.normalPermission) {
         @Handler
         suspend fun CommandSender.onCommand(vararg args: String) {
             if (this is MemberCommandSenderOnMessage) {
@@ -68,11 +56,11 @@ object ChatBot {
                     if (args.size == 1) {
                         val msg =
                             GlobalEventChannel.nextEvent<GroupMessageEvent> { it.bot == bot && it.group == group && it.sender.id == this@onCommand.user.id }.message
-                        if (msg.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face ) }) {
+                        if (msg.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face) }) {
                             push(args[0], listOf(msg.serializeToMiraiCode()), data.Eq)
                         } else if (msg.all { it is ForwardMessage || it !is MessageContent }) {
                             push(args[0],
-                                msg[ForwardMessage]!!.nodeList.filter { it -> it.messageChain.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face ) } }
+                                msg[ForwardMessage]!!.nodeList.filter { it -> it.messageChain.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face) } }
                                     .map { it.messageChain.serializeToMiraiCode() },
                                 data.Eq
                             )
@@ -80,11 +68,11 @@ object ChatBot {
                     } else if (args.size == 2 && args[0] == "-i") {
                         val msg =
                             GlobalEventChannel.nextEvent<GroupMessageEvent> { it.bot == bot && it.group == group && it.sender.id == this@onCommand.user.id }.message
-                        if (msg.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face ) }) {
+                        if (msg.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face) }) {
                             push(args[1], listOf(msg.serializeToMiraiCode()), data.Cn)
                         } else if (msg.all { it is ForwardMessage || it !is MessageContent }) {
                             push(args[1],
-                                msg[ForwardMessage]!!.nodeList.filter { it -> it.messageChain.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face ) } }
+                                msg[ForwardMessage]!!.nodeList.filter { it -> it.messageChain.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face) } }
                                     .map { it.messageChain.serializeToMiraiCode() },
                                 data.Cn
                             )
@@ -114,7 +102,7 @@ object ChatBot {
         }
     }
 
-    object Forget : SimpleCommand(Mcbot, "forget", parentPermission = chatbotperm) {
+    object Forget : SimpleCommand(Mcbot, "forget", parentPermission = Mcbot.adminPermission) {
         @Handler
         suspend fun CommandSender.onCommand(vararg args: String) {
             if (this is MemberCommandSenderOnMessage) {
@@ -186,7 +174,7 @@ object ChatBot {
         }
     }
 
-    object LookUp : SimpleCommand(Mcbot, "lookup", parentPermission = chatbotperm) {
+    object LookUp : SimpleCommand(Mcbot, "lookup", parentPermission = Mcbot.normalPermission) {
         //TODO
         @Handler
         suspend fun CommandSender.onCommand() {
@@ -250,7 +238,7 @@ object ChatBot {
         }
     }
 
-    object ChatBot : CompositeCommand(Mcbot, "chatbot", parentPermission = chatbotperm) {
+    object ChatBot : CompositeCommand(Mcbot, "chatbot", parentPermission = Mcbot.adminPermission) {
         @SubCommand
         suspend fun CommandSender.on() {
             if (this is MemberCommandSenderOnMessage) {
@@ -278,16 +266,42 @@ object ChatBot {
         }
     }
 
-    fun load() {
+    suspend operator fun invoke(event: GroupMessageEvent, mute: Boolean): Boolean {
+        if (status && !mute && !event.message.content.startsWith(CommandManager.commandPrefix) && DataBase[event.group.id].status) {
+            val reply = DataBase[event.group.id].match(event.message)
+            if (reply != null) {
+                event.group.sendMessage(reply.deserializeMiraiCode(event.group))
+                return true
+            }
+        }
+        return false
+    }
+
+    override fun load() {
         DataBase.reload()
         Remember.register()
         Forget.register()
         LookUp.register()
         ChatBot.register()
-        AbstractPermitteeId.AnyUser.permit(chatbotperm)
     }
 
-    fun unload() {
+    override fun unload() {
+        Remember.unregister()
+        Forget.unregister()
+        LookUp.unregister()
+        ChatBot.unregister()
+    }
+
+    override fun enable() {
+        super.enable()
+        Remember.register()
+        Forget.register()
+        LookUp.register()
+        ChatBot.register()
+    }
+
+    override fun disable() {
+        super.disable()
         Remember.unregister()
         Forget.unregister()
         LookUp.unregister()
