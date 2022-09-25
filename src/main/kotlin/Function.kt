@@ -1,9 +1,14 @@
 package mcbot
 
+import kotlinx.coroutines.Deferred
 import net.mamoe.mirai.console.command.CommandSender
 import net.mamoe.mirai.console.command.SimpleCommand
 import net.mamoe.mirai.console.data.AutoSavePluginConfig
 import net.mamoe.mirai.console.data.value
+import net.mamoe.mirai.console.permission.AbstractPermitteeId
+import net.mamoe.mirai.console.permission.PermissionService.Companion.cancel
+import net.mamoe.mirai.console.permission.PermissionService.Companion.permit
+import net.mamoe.mirai.event.Event
 
 abstract class Function(var status:Boolean) {
     init {
@@ -14,6 +19,7 @@ abstract class Function(var status:Boolean) {
             status = config[name]!!
         }
         ref[name] = this
+        load()
     }
 
     open val description = "Mcbot function."
@@ -30,7 +36,10 @@ abstract class Function(var status:Boolean) {
         config[this::class.simpleName!!] = false
     }
 
+    abstract suspend operator fun invoke(event: Event, list: MutableMap<String, Deferred<Boolean>>): Boolean
+
     companion object : AutoSavePluginConfig("McbotConfig") {
+        var owner: Long by value()
         val config: MutableMap<String, Boolean> by value()
         val ref = mutableMapOf<String, Function>()
 
@@ -73,6 +82,34 @@ abstract class Function(var status:Boolean) {
                             }
                         } else {
                             sendMessage("$name not found.")
+                        }
+                    }
+                    3 -> {
+                        if (args[0] == "su") {
+                            when (args[1]) {
+                                "add" -> {
+                                    try {
+                                        val permittee = args[2].removePrefix("@").toLong()
+                                        AbstractPermitteeId.parseFromString("u$permittee").permit(Mcbot.adminPermission)
+                                        sendMessage("Done.")
+                                    } catch (e: Exception) {
+                                        sendMessage(e.message ?: "Internal error.")
+                                    }
+                                }
+                                "cancel" -> {
+                                    try {
+                                        val permittee = args[2].removePrefix("@").toLong()
+                                        AbstractPermitteeId.parseFromString("u$permittee")
+                                            .cancel(Mcbot.adminPermission, true)
+                                        sendMessage("Done.")
+                                    } catch (e: Exception) {
+                                        sendMessage(e.message ?: "Internal error.")
+                                    }
+                                }
+                                else -> sendMessage("Unknown command ${args[1]}.")
+                            }
+                        } else {
+                            sendMessage("Syntax error.")
                         }
                     }
                     else -> sendMessage("Too many args.")

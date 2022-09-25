@@ -1,9 +1,11 @@
 package mcbot
 
+import kotlinx.coroutines.Deferred
 import mcbot.Mcbot.permissionId
 import net.mamoe.mirai.console.command.CommandSender.Companion.toCommandSender
 import net.mamoe.mirai.console.permission.PermissionService
 import net.mamoe.mirai.console.permission.PermissionService.Companion.hasPermission
+import net.mamoe.mirai.event.Event
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.data.QuoteReply
 import net.mamoe.mirai.message.data.content
@@ -18,8 +20,8 @@ object Recall:Function(true) {
         )
     }
 
-    suspend operator fun invoke(event: GroupMessageEvent):Boolean {
-        if (status) {
+    override suspend operator fun invoke(event: Event, list: MutableMap<String, Deferred<Boolean>>): Boolean {
+        if (status && event is GroupMessageEvent) {
             val reply = event.message[QuoteReply]
             if (event.toCommandSender().hasPermission(recallPermission) &&
                 reply != null &&

@@ -1,5 +1,6 @@
 package mcbot
 
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.runBlocking
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.register
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.unregister
@@ -7,6 +8,7 @@ import net.mamoe.mirai.console.command.CommandSender
 import net.mamoe.mirai.console.command.MemberCommandSenderOnMessage
 import net.mamoe.mirai.console.command.RawCommand
 import net.mamoe.mirai.console.command.SimpleCommand
+import net.mamoe.mirai.event.Event
 import net.mamoe.mirai.message.data.MessageChain
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -17,7 +19,11 @@ object McServer:Function(false) {
     val sockets= mutableMapOf<Long,Socket>()
     val senders= mutableMapOf<Long,PrintWriter>()
 
-    override val description="Experimental function, do not use."
+    override val description="Incomplete function, do not use."
+
+    override suspend fun invoke(event: Event, list: MutableMap<String, Deferred<Boolean>>): Boolean {
+        return false
+    }
 
     override fun load(){
         Connect.register()

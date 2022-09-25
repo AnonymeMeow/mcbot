@@ -1,5 +1,7 @@
 package mcbot
 
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.Serializable
 import mcbot.Mcbot.reload
 import net.mamoe.mirai.console.command.*
@@ -7,6 +9,7 @@ import net.mamoe.mirai.console.command.CommandManager.INSTANCE.register
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.unregister
 import net.mamoe.mirai.console.data.AutoSavePluginConfig
 import net.mamoe.mirai.console.data.value
+import net.mamoe.mirai.event.Event
 import net.mamoe.mirai.event.GlobalEventChannel
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.event.nextEvent
@@ -266,8 +269,14 @@ object ChatBot:Function(true) {
         }
     }
 
-    suspend operator fun invoke(event: GroupMessageEvent, mute: Boolean): Boolean {
-        if (status && !mute && !event.message.content.startsWith(CommandManager.commandPrefix) && DataBase[event.group.id].status) {
+    private val mute = listOf("Recall", "Hitokoto")
+    override suspend operator fun invoke(event: Event, list: MutableMap<String, Deferred<Boolean>>): Boolean {
+        if (status &&
+            event is GroupMessageEvent &&
+            DataBase[event.group.id].status &&
+            !mute.map { list[it]!! }.awaitAll().any() &&
+            !event.message.content.startsWith(CommandManager.commandPrefix)
+        ) {
             val reply = DataBase[event.group.id].match(event.message)
             if (reply != null) {
                 event.group.sendMessage(reply.deserializeMiraiCode(event.group))
