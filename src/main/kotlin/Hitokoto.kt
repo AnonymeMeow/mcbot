@@ -38,20 +38,20 @@ object Hitokoto:Function(true) {
                     val json = Json.parseToJsonElement(withContext(Dispatchers.IO) {
                         URL("https://v1.hitokoto.cn/" + if (suffix == "") "" else "?c=$suffix").openStream()
                     }.readBytes().decodeToString()).jsonObject
-                    val from = json["from"]
-                    val fromWho = json["from_who"]
+                    val from = json["from"]?.jsonPrimitive?.contentOrNull
+                    val fromWho = json["from_who"]?.jsonPrimitive?.contentOrNull
                     (if (msg is GroupMessageEvent) msg.group else msg.sender).sendMessage(
                         "「${
                             json["hitokoto"]?.jsonPrimitive?.contentOrNull
                         }」${
                             if (from != null) {
                                 if (fromWho != null) {
-                                    " --${from.jsonPrimitive.content} ${fromWho.jsonPrimitive.content}"
+                                    " --$from $fromWho"
                                 } else {
-                                    " --${from.jsonPrimitive.content}"
+                                    " --$from"
                                 }
                             } else if (fromWho != null) {
-                                " --${fromWho.jsonPrimitive.content}"
+                                " --$fromWho"
                             } else {
                                 ""
                             }
