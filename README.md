@@ -3,11 +3,11 @@
 `mcbot`是一个基于[`mirai`](https://github.com/mamoe/mirai)的QQ插件，部分功能实现参考了[yqbot](https://github.com/Yongqi-Zhuo/yqbot)和[彩虹桥](https://github.com/niltok/tesseract)的实现。
 
 目前具有的功能：
-- 一言（[Hitokoto](#[一言](src/main/kotlin/Hitokoto.kt))）
-- 撤回（[Recall](#[撤回](src/main/kotlin/Recall.kt))）
-- 自动回复（[ChatBot](#[自动回复](src/main/kotlin/ChatBot.kt))）
-- 复读（[Repeater](#[复读](src/main/kotlin/Repeater.kt))）
-- 与Minecraft服务器通讯（未完成）（[McServer](#[与Minecraft服务器通讯（未完成）](src/main/kotlin/McServer.kt))）
+- 一言（[Hitokoto](#一言)）
+- 撤回（[Recall](#撤回)）
+- 自动回复（[ChatBot](#自动回复)）
+- 复读（[Repeater](#复读)）
+- 与Minecraft服务器通讯（未完成）（[McServer](#与Minecraft服务器通讯（未完成）)）
 
 ## 基本功能
 
