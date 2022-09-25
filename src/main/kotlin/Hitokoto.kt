@@ -48,9 +48,9 @@ object Hitokoto:Function(true) {
                         }」${
                             if (from != null) {
                                 if (fromWho != null) {
-                                    " --$from $fromWho"
+                                    " --$fromWho 「$from」"
                                 } else {
-                                    " --$from"
+                                    " --「$from」"
                                 }
                             } else if (fromWho != null) {
                                 " --$fromWho"

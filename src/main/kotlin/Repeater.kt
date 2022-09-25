@@ -1,6 +1,7 @@
 package mcbot
 
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import mcbot.Mcbot.reload
 import kotlinx.serialization.Serializable
@@ -128,7 +129,7 @@ object Repeater:Function(true) {
                         if (it is MarketFace) it.toString() else it.toMessageChain().serializeToMiraiCode()
                     }) >= RepeaterConfig[group.id].threshold &&
                     !message.content.startsWith(CommandManager.commandPrefix) &&
-                    !mute.map { list[it]!! }.awaitAll().any() &&
+                    !mute.map { list[it] ?: Mcbot.async { false } }.awaitAll().any() &&
                     (1..100).random() <= RepeaterConfig[group.id].probability
                 ) {
                     group.sendMessage(message)

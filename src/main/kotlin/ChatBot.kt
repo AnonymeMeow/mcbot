@@ -1,6 +1,7 @@
 package mcbot
 
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.Serializable
 import mcbot.Mcbot.reload
@@ -274,7 +275,7 @@ object ChatBot:Function(true) {
         if (status &&
             event is GroupMessageEvent &&
             DataBase[event.group.id].status &&
-            !mute.map { list[it]!! }.awaitAll().any() &&
+            !mute.map { list[it] ?: Mcbot.async { false } }.awaitAll().any() &&
             !event.message.content.startsWith(CommandManager.commandPrefix)
         ) {
             val reply = DataBase[event.group.id].match(event.message)
