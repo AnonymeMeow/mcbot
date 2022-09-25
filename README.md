@@ -7,7 +7,7 @@
 - 撤回（[Recall](#撤回)）
 - 自动回复（[ChatBot](#自动回复)）
 - 复读（[Repeater](#复读)）
-- 与Minecraft服务器通讯（未完成）（[McServer](#与Minecraft服务器通讯（未完成）)）
+- 与Minecraft服务器通讯（未完成）（[McServer](#McServer)）
 
 ## 基本功能
 
@@ -63,6 +63,6 @@ owner: ${your QQ number}
 - `/repeat threshold [threshold]`:查询或设置本群复读阈值
 - `/repeat probability [probability]`:查询或设置本群复读概率
 
-## [与Minecraft服务器通讯（未完成）](src/main/kotlin/McServer.kt)
+## <a id = "McServer">[与Minecraft服务器通讯（未完成）](src/main/kotlin/McServer.kt)</a>
 
 本bot的本意，与[mcbot-mcside](https://github.com/Zhu-Aemon/mcbot-mcside)一起使用，目前只完成了连接到服务器以及互相转发消息的功能，socket协议以及转发事件等功能正在筹划中。此功能默认处于关闭状态。
