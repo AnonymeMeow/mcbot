@@ -10,6 +10,7 @@ import net.mamoe.mirai.console.permission.PermissionService.Companion.cancel
 import net.mamoe.mirai.console.permission.PermissionService.Companion.permit
 import net.mamoe.mirai.event.Event
 
+@Suppress("LeakingThis","unused")
 abstract class Function(var status:Boolean) {
     init {
         val name = this::class.simpleName!!

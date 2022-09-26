@@ -29,6 +29,7 @@ object Repeater:Function(true) {
             return config[id]!!
         }
 
+        @Suppress("unused")
         object RepeaterCommand : CompositeCommand(Mcbot, "repeat", parentPermission = Mcbot.normalPermission) {
             @SubCommand
             suspend fun CommandSender.threshold() {

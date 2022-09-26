@@ -17,6 +17,7 @@ import net.mamoe.mirai.event.nextEvent
 import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
 
+@Suppress("unused")
 object ChatBot:Function(true) {
     object DataBase : AutoSavePluginConfig("ChatBotDataBase") {
         @Serializable
