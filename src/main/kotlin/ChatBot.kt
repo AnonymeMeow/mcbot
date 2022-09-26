@@ -275,7 +275,7 @@ object ChatBot:Function(true) {
         if (status &&
             event is GroupMessageEvent &&
             DataBase[event.group.id].status &&
-            !mute.map { list[it] ?: Mcbot.async { false } }.awaitAll().any() &&
+            !mute.map { list[it] ?: Mcbot.async { false } }.awaitAll().any { it } &&
             !event.message.content.startsWith(CommandManager.commandPrefix)
         ) {
             val reply = DataBase[event.group.id].match(event.message)
@@ -287,19 +287,23 @@ object ChatBot:Function(true) {
         return false
     }
 
-    override fun load() {
+    init {
         DataBase.reload()
-        Remember.register()
-        Forget.register()
-        LookUp.register()
-        ChatBot.register()
+        if (status) {
+            Remember.register()
+            Forget.register()
+            LookUp.register()
+            ChatBot.register()
+        }
     }
 
     override fun unload() {
-        Remember.unregister()
-        Forget.unregister()
-        LookUp.unregister()
-        ChatBot.unregister()
+        if (status) {
+            Remember.unregister()
+            Forget.unregister()
+            LookUp.unregister()
+            ChatBot.unregister()
+        }
     }
 
     override fun enable() {

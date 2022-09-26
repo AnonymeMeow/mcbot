@@ -19,12 +19,10 @@ abstract class Function(var status:Boolean) {
             status = config[name]!!
         }
         ref[name] = this
-        load()
     }
 
     open val description = "Mcbot function."
 
-    open fun load() {}
     open fun unload() {}
     open fun enable() {
         status = true

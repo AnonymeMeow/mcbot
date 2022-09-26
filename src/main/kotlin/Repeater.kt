@@ -129,7 +129,7 @@ object Repeater:Function(true) {
                         if (it is MarketFace) it.toString() else it.toMessageChain().serializeToMiraiCode()
                     }) >= RepeaterConfig[group.id].threshold &&
                     !message.content.startsWith(CommandManager.commandPrefix) &&
-                    !mute.map { list[it] ?: Mcbot.async { false } }.awaitAll().any() &&
+                    !mute.map { list[it] ?: Mcbot.async { false } }.awaitAll().any { it } &&
                     (1..100).random() <= RepeaterConfig[group.id].probability
                 ) {
                     group.sendMessage(message)
@@ -144,13 +144,13 @@ object Repeater:Function(true) {
         return false
     }
 
-    override fun load() {
+    init {
         RepeaterConfig.reload()
-        RepeaterConfig.RepeaterCommand.register()
+        if (status) RepeaterConfig.RepeaterCommand.register()
     }
 
     override fun unload() {
-        RepeaterConfig.RepeaterCommand.unregister()
+        if (status) RepeaterConfig.RepeaterCommand.unregister()
     }
 
     override fun enable() {

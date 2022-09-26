@@ -12,17 +12,30 @@ import net.mamoe.mirai.console.plugin.jvm.KotlinPlugin
 import net.mamoe.mirai.event.Event
 import net.mamoe.mirai.event.globalEventChannel
 
-object Mcbot:KotlinPlugin(JvmPluginDescription(id="mcbot.Mcbot",name="Mcbot",version="0.1.0")) {
+object Mcbot : KotlinPlugin(JvmPluginDescription(id = "mcbot.Mcbot", name = "Mcbot", version = "0.1.0")) {
+    private val funcList by lazy {
+        arrayOf(
+            Recall,
+            Hitokoto,
+            McServer,
+            ChatBot,
+            Repeater
+        )
+    }
+
     val normalPermission by lazy {
         PermissionService.INSTANCE.register(
             permissionId("normalPermission"),
-            "普通用户权限"
+            "普通用户权限",
+            parentPermission
         )
     }
+
     val adminPermission by lazy {
         PermissionService.INSTANCE.register(
             permissionId("adminPermission"),
-            "管理员权限"
+            "管理员权限",
+            parentPermission
         )
     }
 
@@ -32,21 +45,12 @@ object Mcbot:KotlinPlugin(JvmPluginDescription(id="mcbot.Mcbot",name="Mcbot",ver
         AbstractPermitteeId.parseFromString("u${Function.owner}").permit(parentPermission)
         AbstractPermitteeId.AnyUser.permit(normalPermission)
         globalEventChannel().subscribeAlways<Event> {
-            fun run(vararg funcList: Function) {
-                fun MutableMap<String, Deferred<Boolean>>.add(key: Function) {
-                    this[key::class.simpleName!!] = async { key(this@subscribeAlways, this@add) }
+            val list = mutableMapOf<String, Deferred<Boolean>>()
+            for (func in funcList) list.let {
+                it[func::class.simpleName!!] = async {
+                    func(this@subscribeAlways, it)
                 }
-
-                val list = mutableMapOf<String, Deferred<Boolean>>()
-                for (func in funcList) list.add(func)
             }
-            run(
-                Recall,
-                Hitokoto,
-                McServer,
-                ChatBot,
-                Repeater
-            )
         }
         logger.info("Mcbot enabled")
     }

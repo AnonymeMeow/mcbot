@@ -25,13 +25,17 @@ object McServer:Function(false) {
         return false
     }
 
-    override fun load(){
-        Connect.register()
-        Sender.register()
+    init{
+        if (status) {
+            Connect.register()
+            Sender.register()
+        }
     }
     override fun unload(){
-        Connect.unregister()
-        Sender.unregister()
+        if (status) {
+            Connect.unregister()
+            Sender.unregister()
+        }
         for (item in sockets){
             item.value.close()
         }
