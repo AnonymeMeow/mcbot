@@ -11,7 +11,7 @@
 
 ## 基本功能
 
-所有功能均在[Mcbot](src/main/kotlin/Mcbot.kt)的run函数中，在bot上线时由BotOnlineEvent初始化。各功能之间是解耦的，可以简单地将其从run函数中移除以达到不加载此功能的目的。
+所有功能均在[Mcbot](src/main/kotlin/Mcbot.kt)的funcList中，在bot上线时由BotOnlineEvent初始化。各功能之间是解耦的，可以简单地将其从funcList中移除以达到不加载此功能的目的。
 
 [Function](src/main/kotlin/Function.kt)是所有功能的父类，实现了自动加载以及全局管理功能。其中伴生对象的成员变量owner是bot主人的QQ号，请在${miraiFolder}/config/mcbot.Mcbot/McbotConfig.yml中加入一行：
 
