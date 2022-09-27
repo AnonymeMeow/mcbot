@@ -15,7 +15,7 @@ import net.mamoe.mirai.message.data.PlainText
 import net.mamoe.mirai.message.data.content
 import java.net.URL
 
-object Hitokoto:Function(true) {
+object Hitokoto : Function(true) {
     override suspend operator fun invoke(event: Event, list: MutableMap<String, Deferred<Boolean>>): Boolean {
         if (status && event is MessageEvent) {
             val message = event.message

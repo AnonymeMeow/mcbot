@@ -15,67 +15,69 @@ import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.net.Socket
 
-object McServer:Function(false) {
-    val sockets= mutableMapOf<Long,Socket>()
-    val senders= mutableMapOf<Long,PrintWriter>()
+object McServer : Function(false) {
+    val sockets = mutableMapOf<Long, Socket>()
+    val senders = mutableMapOf<Long, PrintWriter>()
 
-    override val description="Incomplete function, do not use."
+    override val description = "Incomplete function, do not use."
 
     override suspend fun invoke(event: Event, list: MutableMap<String, Deferred<Boolean>>): Boolean {
         return false
     }
 
-    init{
+    init {
         if (status) {
             Connect.register()
             Sender.register()
         }
     }
-    override fun unload(){
+
+    override fun unload() {
         if (status) {
             Connect.unregister()
             Sender.unregister()
         }
-        for (item in sockets){
+        for (item in sockets) {
             item.value.close()
         }
     }
 }
 
-object Connect:SimpleCommand(Mcbot,"connect", parentPermission = Mcbot.adminPermission){
-    @Handler suspend fun CommandSender.onCommand(ip:String,port:Int){
-        if (this is MemberCommandSenderOnMessage){
-            if (McServer.sockets[group.id]==null){
+object Connect : SimpleCommand(Mcbot, "connect", parentPermission = Mcbot.adminPermission) {
+    @Handler
+    suspend fun CommandSender.onCommand(ip: String, port: Int) {
+        if (this is MemberCommandSenderOnMessage) {
+            if (McServer.sockets[group.id] == null) {
                 try {
-                    val socket=Socket(ip,port)
+                    val socket = Socket(ip, port)
                     group.sendMessage("Connected.")
                     McServer.sockets[group.id] = socket
-                    McServer.senders[group.id]=PrintWriter(socket.getOutputStream())
-                    val receiver=BufferedReader(InputStreamReader(socket.getInputStream()))
-                    object:Thread(){
+                    McServer.senders[group.id] = PrintWriter(socket.getOutputStream())
+                    val receiver = BufferedReader(InputStreamReader(socket.getInputStream()))
+                    object : Thread() {
                         override fun run() {
                             runBlocking { group.sendMessage("Thread launched.") }
-                            var msg:String
-                            while (true){
-                                msg=receiver.readLine()
+                            var msg: String
+                            while (true) {
+                                msg = receiver.readLine()
                                 runBlocking { group.sendMessage(msg) }
                             }
                         }
                     }.start()
-                }catch (e:java.lang.Exception){
-                    group.sendMessage(e.message?:"Error(s) occurred during connecting to the server.")
+                } catch (e: java.lang.Exception) {
+                    group.sendMessage(e.message ?: "Error(s) occurred during connecting to the server.")
                 }
-            }else{
-                group.sendMessage("This group has already connected to a server:"+McServer.sockets[group.id]!!.inetAddress.hostAddress)
+            } else {
+                group.sendMessage("This group has already connected to a server:" + McServer.sockets[group.id]!!.inetAddress.hostAddress)
             }
         }
     }
 }
 
-object Sender:RawCommand(Mcbot,"sd", parentPermission = Mcbot.normalPermission){
-    override suspend fun CommandSender.onCommand(args: MessageChain){
-        if (this is MemberCommandSenderOnMessage && McServer.senders[group.id]!=null){
-            McServer.senders[group.id]!!.write(this.name+":"+args.contentToString()+"\n")
+object Sender : RawCommand(Mcbot, "sd", parentPermission = Mcbot.normalPermission) {
+    override suspend fun CommandSender.onCommand(args: MessageChain) {
+        if (this is MemberCommandSenderOnMessage && McServer.senders[group.id] != null) {
+            McServer.senders[group.id]!!.write(this.name + ":" + args.contentToString() + "\n")
             McServer.senders[group.id]!!.flush()
         }
     }

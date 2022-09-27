@@ -10,8 +10,10 @@ import net.mamoe.mirai.console.data.AutoSavePluginConfig
 import net.mamoe.mirai.console.data.value
 import net.mamoe.mirai.contact.Contact.Companion.uploadImage
 import net.mamoe.mirai.contact.Group
-import net.mamoe.mirai.event.*
+import net.mamoe.mirai.event.Event
+import net.mamoe.mirai.event.GlobalEventChannel
 import net.mamoe.mirai.event.events.GroupMessageEvent
+import net.mamoe.mirai.event.nextEvent
 import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.message.data.Image.Key.isUploaded
@@ -22,7 +24,7 @@ import javax.imageio.ImageIO
 import kotlin.math.min
 
 @Suppress("unused")
-object ChatBot:Function(true) {
+object ChatBot : Function(true) {
     val imagePath = Mcbot.dataFolderPath.toString() + "/ChatBot"
     suspend inline fun buildFromCode(code: String, group: Group) =
         code.deserializeMiraiCode(group).map {
@@ -46,7 +48,7 @@ object ChatBot:Function(true) {
             suspend fun match(event: GroupMessageEvent): Message? {
                 val msg = event.message
                 if (msg.toMessageChain().all { it is PlainText || it !is MessageContent } && msg.content in Eq)
-                    return buildFromCode(Eq[msg.content]!!.random(),event.group)
+                    return buildFromCode(Eq[msg.content]!!.random(), event.group)
                 val candi = mutableListOf<String>()
                 for (str in msg.toMessageChain().filterIsInstance<PlainText>()) {
                     for (item in Cn) {
@@ -55,7 +57,7 @@ object ChatBot:Function(true) {
                         }
                     }
                 }
-                if (candi.size > 0) return buildFromCode(Cn[candi.random()]!!.random(),event.group)
+                if (candi.size > 0) return buildFromCode(Cn[candi.random()]!!.random(), event.group)
                 return null
             }
         }
@@ -74,7 +76,7 @@ object ChatBot:Function(true) {
                 val data = DataBase[group.id]
                 if (data.status) {
                     fun pushString(key: String, value: List<String>, inline: Boolean) {
-                        val list=if (inline) data.Cn else data.Eq
+                        val list = if (inline) data.Cn else data.Eq
                         if (list.contains(key)) {
                             for (elem in value) {
                                 if (elem !in list[key]!!) {
@@ -91,7 +93,7 @@ object ChatBot:Function(true) {
                         value: List<MessageChain>,
                         inline: Boolean
                     ) {
-                        val list=if (inline) data.Cn else data.Eq
+                        val list = if (inline) data.Cn else data.Eq
                         if (list.contains(key)) {
                             for (elem in value) {
                                 if (elem.serializeToMiraiCode() !in list[key]!!) {
@@ -196,11 +198,15 @@ object ChatBot:Function(true) {
                         fun delFromCode(code: String) {
                             """\[mirai:image:\{[\da-fA-F-]+}\.[a-zA-Z]+]""".toRegex()
                                 .findAll(code).forEach {
-                                    val f=File(imagePath + "/${group.id}", it.value.removeSurrounding("[mirai:image:","]"))
+                                    val f = File(
+                                        imagePath + "/${group.id}",
+                                        it.value.removeSurrounding("[mirai:image:", "]")
+                                    )
                                     if (f.exists()) f.delete()
                                 }
                         }
-                        val list=if (param['i']!!) data.Cn else data.Eq
+
+                        val list = if (param['i']!!) data.Cn else data.Eq
                         if (key in list) {
                             if (param['k']!!) {
                                 list[key]!!.forEach { delFromCode(it) }
@@ -228,55 +234,59 @@ object ChatBot:Function(true) {
     }
 
     object LookUp : SimpleCommand(Mcbot, "lookup", parentPermission = Mcbot.normalPermission) {
-        data class GroupSearchResult(var page: Int, val forward: Boolean, val result: List<String>,val key: String) {
-            var lastReply:MessageSource?=null
+        data class GroupSearchResult(var page: Int, val forward: Boolean, val result: List<String>, val key: String) {
+            var lastReply: MessageSource? = null
             suspend fun handle(msg: GroupMessageEvent) {
-                if (lastReply != null){
-                    when (msg.message.content){
-                        "prev"->{
-                            if (page>0) page--
+                if (lastReply != null) {
+                    when (msg.message.content) {
+                        "prev" -> {
+                            if (page > 0) page--
                             else {
-                                msg.group.sendMessage(QuoteReply(msg.message)+"Index out of range.")
+                                msg.group.sendMessage(QuoteReply(msg.message) + "Index out of range.")
                                 return
                             }
                         }
-                        "next" ->{
-                            if (page>=(result.size-1)/20){
-                                msg.group.sendMessage(QuoteReply(msg.message)+"Index out of range.")
+                        "next" -> {
+                            if (page >= (result.size - 1) / 20) {
+                                msg.group.sendMessage(QuoteReply(msg.message) + "Index out of range.")
                                 return
-                            }else page++
+                            } else page++
                         }
-                        else ->{
+                        else -> {
                             try {
-                                val set=msg.message.content.toInt()
-                                if (set<0 || set>(result.size-1)/20){
-                                    msg.group.sendMessage(QuoteReply(msg.message)+"Index out of range.")
+                                val set = msg.message.content.toInt()
+                                if (set < 0 || set > (result.size - 1) / 20) {
+                                    msg.group.sendMessage(QuoteReply(msg.message) + "Index out of range.")
                                     return
                                 }
-                                page=set
-                            }catch (e:Exception){
-                                msg.group.sendMessage(QuoteReply(msg.message)+(e.message?:"Internal error"))
+                                page = set
+                            } catch (e: Exception) {
+                                msg.group.sendMessage(QuoteReply(msg.message) + (e.message ?: "Internal error"))
                                 return
                             }
                         }
                     }
                 }
                 if (forward) {
-                    lastReply=msg.group.sendMessage(buildForwardMessage(msg.group,object:ForwardMessage.DisplayStrategy{
-                        override fun generateTitle(forward: RawForwardMessage): String = "${key}的查询结果"
-                        override fun generatePreview(forward: RawForwardMessage): List<String> = listOf("共${result.size}条结果","第${page}页/共${(result.size-1)/20}页")
-                        override fun generateSummary(forward: RawForwardMessage): String = "查询结果"
-                        override fun generateBrief(forward: RawForwardMessage): String = "[查询结果]"
-                    }) {
-                        for (i in (0..min(19,result.size-20*page-1))){
-                            msg.bot says (i+1).toString()
-                            msg.bot says buildFromCode(result[20*page+i],msg.group)
-                        }
-                        msg.bot says "#Page:${page}/${(result.size-1)/20}"
-                    }).source
+                    lastReply =
+                        msg.group.sendMessage(buildForwardMessage(msg.group, object : ForwardMessage.DisplayStrategy {
+                            override fun generateTitle(forward: RawForwardMessage): String = "${key}的查询结果"
+                            override fun generatePreview(forward: RawForwardMessage): List<String> =
+                                listOf("共${result.size}条结果", "第${page}页/共${(result.size - 1) / 20}页")
+
+                            override fun generateSummary(forward: RawForwardMessage): String = "查询结果"
+                            override fun generateBrief(forward: RawForwardMessage): String = "[查询结果]"
+                        }) {
+                            for (i in (0..min(19, result.size - 20 * page - 1))) {
+                                msg.bot says (i + 1).toString()
+                                msg.bot says buildFromCode(result[20 * page + i], msg.group)
+                            }
+                            msg.bot says "#Page:${page}/${(result.size - 1) / 20}"
+                        }).source
                 } else {
-                    lastReply=msg.group.sendMessage(
-                        QuoteReply(msg.message) + result.drop(20 * page).take(20).joinToString("\n")+"\n#Page:${page}/${(result.size-1)/20}"
+                    lastReply = msg.group.sendMessage(
+                        QuoteReply(msg.message) + result.drop(20 * page).take(20)
+                            .joinToString("\n") + "\n#Page:${page}/${(result.size - 1) / 20}"
                     ).source
                 }
             }
@@ -310,20 +320,20 @@ object ChatBot:Function(true) {
                     if (param['k']!!) {
                         if (result.contains(key)) {
                             searchResult.remove(group.id)
-                            searchResult[group.id] = GroupSearchResult(0, true, result[key]!!,key)
+                            searchResult[group.id] = GroupSearchResult(0, true, result[key]!!, key)
                             searchResult[group.id]!!.handle(fromEvent)
                         } else {
-                            group.sendMessage(QuoteReply(fromEvent.message)+"$key not found.")
+                            group.sendMessage(QuoteReply(fromEvent.message) + "$key not found.")
                             return
                         }
                     } else {
                         searchResult.remove(group.id)
-                        if (result.keys.none { it.contains(key) }){
-                            group.sendMessage(QuoteReply(fromEvent.message)+"Empty.")
+                        if (result.keys.none { it.contains(key) }) {
+                            group.sendMessage(QuoteReply(fromEvent.message) + "Empty.")
                             searchResult.remove(group.id)
-                        }else {
+                        } else {
                             searchResult[group.id] =
-                                GroupSearchResult(0, false, result.keys.filter { it.contains(key) },key)
+                                GroupSearchResult(0, false, result.keys.filter { it.contains(key) }, key)
                             searchResult[group.id]!!.handle(fromEvent)
                         }
                     }

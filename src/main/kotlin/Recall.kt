@@ -11,7 +11,7 @@ import net.mamoe.mirai.message.data.QuoteReply
 import net.mamoe.mirai.message.data.content
 import net.mamoe.mirai.message.data.recallSource
 
-object Recall:Function(true) {
+object Recall : Function(true) {
     private val recallPermission by lazy {
         PermissionService.INSTANCE.register(
             permissionId("recallPermission"),

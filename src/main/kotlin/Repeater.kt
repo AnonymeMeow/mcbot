@@ -3,18 +3,21 @@ package mcbot
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import mcbot.Mcbot.reload
 import kotlinx.serialization.Serializable
-import net.mamoe.mirai.console.command.*
+import mcbot.Mcbot.reload
+import net.mamoe.mirai.console.command.CommandManager
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.register
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.unregister
+import net.mamoe.mirai.console.command.CommandSender
+import net.mamoe.mirai.console.command.CompositeCommand
+import net.mamoe.mirai.console.command.MemberCommandSenderOnMessage
 import net.mamoe.mirai.console.data.AutoSavePluginConfig
 import net.mamoe.mirai.console.data.value
 import net.mamoe.mirai.event.Event
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.data.*
 
-object Repeater:Function(true) {
+object Repeater : Function(true) {
     object RepeaterConfig : AutoSavePluginConfig("RepeaterConfig") {
         @Serializable
         class GroupConfig {
