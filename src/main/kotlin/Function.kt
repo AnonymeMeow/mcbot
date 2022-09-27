@@ -45,6 +45,7 @@ abstract class Function(var status: Boolean) {
         object Config : SimpleCommand(Mcbot, "mcbot") {
             @Handler
             suspend fun CommandSender.onCommand(vararg args: String) {
+                config.run { forEach { (key, _) -> if (key !in ref) remove(key) } }
                 when (args.size) {
                     0 -> {
                         sendMessage("Loaded functions:\n" + config.map { "${it.key}:${it.value}" }.joinToString("\n"))
