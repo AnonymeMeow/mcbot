@@ -1,8 +1,6 @@
 package mcbot
 
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
 import mcbot.Mcbot.reload
 import net.mamoe.mirai.console.command.*
@@ -10,15 +8,34 @@ import net.mamoe.mirai.console.command.CommandManager.INSTANCE.register
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.unregister
 import net.mamoe.mirai.console.data.AutoSavePluginConfig
 import net.mamoe.mirai.console.data.value
-import net.mamoe.mirai.event.Event
-import net.mamoe.mirai.event.GlobalEventChannel
+import net.mamoe.mirai.contact.Contact.Companion.uploadImage
+import net.mamoe.mirai.contact.Group
+import net.mamoe.mirai.event.*
 import net.mamoe.mirai.event.events.GroupMessageEvent
-import net.mamoe.mirai.event.nextEvent
 import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
+import net.mamoe.mirai.message.data.Image.Key.isUploaded
+import net.mamoe.mirai.message.data.Image.Key.queryUrl
+import java.io.File
+import java.net.URL
+import javax.imageio.ImageIO
+import kotlin.math.min
 
 @Suppress("unused")
 object ChatBot:Function(true) {
+    val imagePath = Mcbot.dataFolderPath.toString() + "/ChatBot"
+    suspend inline fun buildFromCode(code: String, group: Group) =
+        code.deserializeMiraiCode(group).map {
+            if (it is Image && !it.isUploaded(group.bot)) {
+                group.uploadImage(
+                    File(
+                        imagePath + "/${group.id}",
+                        it.imageId
+                    )
+                )
+            } else it
+        }.toMessageChain()
+
     object DataBase : AutoSavePluginConfig("ChatBotDataBase") {
         @Serializable
         data class GroupData(
@@ -26,10 +43,10 @@ object ChatBot:Function(true) {
             val Eq: MutableMap<String, MutableList<String>> = mutableMapOf(),
             val Cn: MutableMap<String, MutableList<String>> = mutableMapOf()
         ) {
-            fun match(msg: Message): String? {
-                if (msg.toMessageChain().all { it is PlainText || it !is MessageContent }) {
-                    if (msg.content in Eq) return Eq[msg.content]!!.random()
-                }
+            suspend fun match(event: GroupMessageEvent): Message? {
+                val msg = event.message
+                if (msg.toMessageChain().all { it is PlainText || it !is MessageContent } && msg.content in Eq)
+                    return buildFromCode(Eq[msg.content]!!.random(),event.group)
                 val candi = mutableListOf<String>()
                 for (str in msg.toMessageChain().filterIsInstance<PlainText>()) {
                     for (item in Cn) {
@@ -38,9 +55,7 @@ object ChatBot:Function(true) {
                         }
                     }
                 }
-                if (candi.size > 0) {
-                    return Cn[candi.random()]!!.random()
-                }
+                if (candi.size > 0) return buildFromCode(Cn[candi.random()]!!.random(),event.group)
                 return null
             }
         }
@@ -55,54 +70,87 @@ object ChatBot:Function(true) {
     object Remember : SimpleCommand(Mcbot, "remember", parentPermission = Mcbot.normalPermission) {
         @Handler
         suspend fun CommandSender.onCommand(vararg args: String) {
-            if (this is MemberCommandSenderOnMessage) {
+            if (this is MemberCommandSenderOnMessage && fromEvent.message.all { it is PlainText || it !is MessageContent }) {
                 val data = DataBase[group.id]
                 if (data.status) {
+                    fun pushString(key: String, value: List<String>, inline: Boolean) {
+                        val list=if (inline) data.Cn else data.Eq
+                        if (list.contains(key)) {
+                            for (elem in value) {
+                                if (elem !in list[key]!!) {
+                                    list[key]!!.add(elem)
+                                }
+                            }
+                        } else {
+                            list[key] = value.toMutableList()
+                        }
+                    }
+
+                    suspend fun pushMessage(
+                        key: String,
+                        value: List<MessageChain>,
+                        inline: Boolean
+                    ) {
+                        val list=if (inline) data.Cn else data.Eq
+                        if (list.contains(key)) {
+                            for (elem in value) {
+                                if (elem.serializeToMiraiCode() !in list[key]!!) {
+                                    list[key]!!.add(elem.serializeToMiraiCode())
+                                    elem.filterIsInstance<Image>().forEach {
+                                        withContext(Dispatchers.IO) {
+                                            val f = File(imagePath + "/${group.id}", it.imageId)
+                                            f.parentFile.mkdirs()
+                                            ImageIO.write(ImageIO.read(URL(it.queryUrl())), it.imageType.name, f)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            list[key] = value.map { it.serializeToMiraiCode() }.toMutableList()
+                            value.forEach {
+                                it.filterIsInstance<Image>().forEach {
+                                    withContext(Dispatchers.IO) {
+                                        val f = File(imagePath + "/${group.id}", it.imageId)
+                                        f.parentFile.mkdirs()
+                                        ImageIO.write(ImageIO.read(URL(it.queryUrl())), it.imageType.name, f)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (args.size == 1) {
                         val msg =
                             GlobalEventChannel.nextEvent<GroupMessageEvent> { it.bot == bot && it.group == group && it.sender.id == this@onCommand.user.id }.message
                         if (msg.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face) }) {
-                            push(args[0], listOf(msg.serializeToMiraiCode()), data.Eq)
+                            pushMessage(args[0], listOf(msg), false)
                         } else if (msg.all { it is ForwardMessage || it !is MessageContent }) {
-                            push(args[0],
+                            pushMessage(args[0],
                                 msg[ForwardMessage]!!.nodeList.filter { it -> it.messageChain.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face) } }
-                                    .map { it.messageChain.serializeToMiraiCode() },
-                                data.Eq
+                                    .map { it.messageChain },
+                                false
                             )
                         }
                     } else if (args.size == 2 && args[0] == "-i") {
                         val msg =
                             GlobalEventChannel.nextEvent<GroupMessageEvent> { it.bot == bot && it.group == group && it.sender.id == this@onCommand.user.id }.message
                         if (msg.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face) }) {
-                            push(args[1], listOf(msg.serializeToMiraiCode()), data.Cn)
+                            pushMessage(args[1], listOf(msg), true)
                         } else if (msg.all { it is ForwardMessage || it !is MessageContent }) {
-                            push(args[1],
+                            pushMessage(args[1],
                                 msg[ForwardMessage]!!.nodeList.filter { it -> it.messageChain.all { it !is MessageContent || (it is PlainText || it is Image || it is At || it is Face) } }
-                                    .map { it.messageChain.serializeToMiraiCode() },
-                                data.Cn
+                                    .map { it.messageChain },
+                                true
                             )
                         }
                     } else if (args.size > 1) {
                         if (args[0] == "-i") {
-                            push(args[1], args.slice(2 until args.size), data.Cn)
+                            pushString(args[1], args.slice(2 until args.size), true)
                         } else {
-                            push(args[0], args.slice(1 until args.size), data.Eq)
+                            pushString(args[0], args.slice(1 until args.size), false)
                         }
                     }
                     group.sendMessage("Done.")
                 }
-            }
-        }
-
-        private fun push(key: String, value: List<String>, list: MutableMap<String, MutableList<String>>) {
-            if (list.contains(key)) {
-                for (elem in value) {
-                    if (elem !in list[key]!!) {
-                        list[key]!!.add(elem)
-                    }
-                }
-            } else {
-                list[key] = value.toMutableList()
             }
         }
     }
@@ -110,7 +158,7 @@ object ChatBot:Function(true) {
     object Forget : SimpleCommand(Mcbot, "forget", parentPermission = Mcbot.adminPermission) {
         @Handler
         suspend fun CommandSender.onCommand(vararg args: String) {
-            if (this is MemberCommandSenderOnMessage) {
+            if (this is MemberCommandSenderOnMessage && fromEvent.message.all { it is PlainText || it !is MessageContent }) {
                 val data = DataBase[group.id]
                 if (data.status) {
                     if (args.size >= 2) {
@@ -121,7 +169,7 @@ object ChatBot:Function(true) {
                         val key: String
                         val value: List<Int>
                         if (args[0].startsWith("-")) {
-                            for (char in args[0].substring(1)) {
+                            for (char in args[0].removePrefix("-")) {
                                 if (char in param) {
                                     param[char] = true
                                 } else {
@@ -145,30 +193,30 @@ object ChatBot:Function(true) {
                                 return
                             }
                         }
-                        if (param['i']!!) {
-                            if (key in data.Cn) {
-                                if (param['k']!!) {
-                                    data.Cn.remove(key)
-                                } else {
-                                    for (i in value) if (i <= data.Cn[key]!!.size && i > 0) data.Cn[key]!!.removeAt(i - 1)
-                                    if (data.Cn[key]!!.isEmpty()) data.Cn.remove(key)
+                        fun delFromCode(code: String) {
+                            """\[mirai:image:\{[\da-fA-F-]+}\.[a-zA-Z]+]""".toRegex()
+                                .findAll(code).forEach {
+                                    val f=File(imagePath + "/${group.id}", it.value.removeSurrounding("[mirai:image:","]"))
+                                    if (f.exists()) f.delete()
                                 }
+                        }
+                        val list=if (param['i']!!) data.Cn else data.Eq
+                        if (key in list) {
+                            if (param['k']!!) {
+                                list[key]!!.forEach { delFromCode(it) }
+                                list.remove(key)
                             } else {
-                                group.sendMessage("$key not found.")
-                                return
+                                for (i in value) {
+                                    if (i <= list[key]!!.size && i > 0) {
+                                        delFromCode(list[key]!![i - 1])
+                                        list[key]!!.removeAt(i - 1)
+                                    }
+                                }
+                                if (list[key]!!.isEmpty()) list.remove(key)
                             }
                         } else {
-                            if (key in data.Eq) {
-                                if (param['k']!!) {
-                                    data.Eq.remove(key)
-                                } else {
-                                    for (i in value) if (i <= data.Eq[key]!!.size && i > 0) data.Eq[key]!!.removeAt(i - 1)
-                                    if (data.Eq[key]!!.isEmpty()) data.Eq.remove(key)
-                                }
-                            } else {
-                                group.sendMessage("$key not found.")
-                                return
-                            }
+                            group.sendMessage("$key not found.")
+                            return
                         }
                         group.sendMessage("Done.")
                     } else {
@@ -180,63 +228,104 @@ object ChatBot:Function(true) {
     }
 
     object LookUp : SimpleCommand(Mcbot, "lookup", parentPermission = Mcbot.normalPermission) {
-        //TODO
-        @Handler
-        suspend fun CommandSender.onCommand() {
-            if (this is MemberCommandSenderOnMessage) {
-                val data = DataBase[group.id]
-                if (data.status) {
-                    group.sendMessage("此功能正绝赞咕咕中，敬请期待。")
-                }
-            }
-        }
-
-        //TODO
-        @Handler
-        suspend fun CommandSender.onCommand(key: String) {
-            if (this is MemberCommandSenderOnMessage) {
-                val data = DataBase[group.id]
-                if (data.status) {
-                    group.sendMessage("此功能正绝赞咕咕中，敬请期待。")
-                }
-            }
-        }
-
-        @Handler
-        suspend fun CommandSender.onCommand(key: String, index: Int) {
-            if (this is MemberCommandSenderOnMessage) {
-                val data = DataBase[group.id]
-                if (data.status) {
-                    if (key in data.Eq) {
-                        if (index > 0 && index <= data.Eq[key]!!.size) {
-                            group.sendMessage(data.Eq[key]!![index - 1].deserializeMiraiCode(group))
-                        } else {
-                            group.sendMessage("Index out of range.")
+        data class GroupSearchResult(var page: Int, val forward: Boolean, val result: List<String>,val key: String) {
+            var lastReply:MessageSource?=null
+            suspend fun handle(msg: GroupMessageEvent) {
+                if (lastReply != null){
+                    when (msg.message.content){
+                        "prev"->{
+                            if (page>0) page--
+                            else {
+                                msg.group.sendMessage(QuoteReply(msg.message)+"Index out of range.")
+                                return
+                            }
                         }
-                    } else {
-                        group.sendMessage("$key not found.")
+                        "next" ->{
+                            if (page>=(result.size-1)/20){
+                                msg.group.sendMessage(QuoteReply(msg.message)+"Index out of range.")
+                                return
+                            }else page++
+                        }
+                        else ->{
+                            try {
+                                val set=msg.message.content.toInt()
+                                if (set<0 || set>(result.size-1)/20){
+                                    msg.group.sendMessage(QuoteReply(msg.message)+"Index out of range.")
+                                    return
+                                }
+                                page=set
+                            }catch (e:Exception){
+                                msg.group.sendMessage(QuoteReply(msg.message)+(e.message?:"Internal error"))
+                                return
+                            }
+                        }
                     }
                 }
+                if (forward) {
+                    lastReply=msg.group.sendMessage(buildForwardMessage(msg.group,object:ForwardMessage.DisplayStrategy{
+                        override fun generateTitle(forward: RawForwardMessage): String = "${key}的查询结果"
+                        override fun generatePreview(forward: RawForwardMessage): List<String> = listOf("共${result.size}条结果","第${page}页/共${(result.size-1)/20}页")
+                        override fun generateSummary(forward: RawForwardMessage): String = "查询结果"
+                        override fun generateBrief(forward: RawForwardMessage): String = "[查询结果]"
+                    }) {
+                        for (i in (0..min(19,result.size-20*page-1))){
+                            msg.bot says (i+1).toString()
+                            msg.bot says buildFromCode(result[20*page+i],msg.group)
+                        }
+                        msg.bot says "#Page:${page}/${(result.size-1)/20}"
+                    }).source
+                } else {
+                    lastReply=msg.group.sendMessage(
+                        QuoteReply(msg.message) + result.drop(20 * page).take(20).joinToString("\n")+"\n#Page:${page}/${(result.size-1)/20}"
+                    ).source
+                }
             }
         }
 
+        val searchResult = mutableMapOf<Long, GroupSearchResult>()
+
         @Handler
-        suspend fun CommandSender.onCommand(param: String, key: String, index: Int) {
-            if (this is MemberCommandSenderOnMessage) {
+        suspend fun CommandSender.onCommand(vararg args: String) {
+            if (this is MemberCommandSenderOnMessage && fromEvent.message.all { it is PlainText || it !is MessageContent }) {
                 val data = DataBase[group.id]
                 if (data.status) {
-                    if (param == "-i") {
-                        if (key in data.Cn) {
-                            if (index > 0 && index <= data.Cn[key]!!.size) {
-                                group.sendMessage(data.Cn[key]!![index - 1].deserializeMiraiCode(group))
+                    val param = mutableMapOf(
+                        'i' to false,
+                        'k' to false
+                    )
+                    val key: String
+                    if (args.isEmpty()) key = ""
+                    else if (args[0].startsWith("-")) {
+                        for (char in args[0].removePrefix("-")) {
+                            if (char in param) {
+                                param[char] = true
                             } else {
-                                group.sendMessage("Index out of range.")
+                                group.sendMessage("Unknown parameter ${char}.")
+                                return
                             }
+                        }
+                        key = if (args.size > 1) args[1] else ""
+                    } else key = args[0]
+                    val result = if (param['i']!!) data.Cn else data.Eq
+                    if (param['k']!!) {
+                        if (result.contains(key)) {
+                            searchResult.remove(group.id)
+                            searchResult[group.id] = GroupSearchResult(0, true, result[key]!!,key)
+                            searchResult[group.id]!!.handle(fromEvent)
                         } else {
-                            group.sendMessage("$key not found.")
+                            group.sendMessage(QuoteReply(fromEvent.message)+"$key not found.")
+                            return
                         }
                     } else {
-                        group.sendMessage("Syntax error.")
+                        searchResult.remove(group.id)
+                        if (result.keys.none { it.contains(key) }){
+                            group.sendMessage(QuoteReply(fromEvent.message)+"Empty.")
+                            searchResult.remove(group.id)
+                        }else {
+                            searchResult[group.id] =
+                                GroupSearchResult(0, false, result.keys.filter { it.contains(key) },key)
+                            searchResult[group.id]!!.handle(fromEvent)
+                        }
                     }
                 }
             }
@@ -279,10 +368,21 @@ object ChatBot:Function(true) {
             !mute.map { list[it] ?: Mcbot.async { false } }.awaitAll().any { it } &&
             !event.message.content.startsWith(CommandManager.commandPrefix)
         ) {
-            val reply = DataBase[event.group.id].match(event.message)
-            if (reply != null) {
-                event.group.sendMessage(reply.deserializeMiraiCode(event.group))
+            val quote = event.message[QuoteReply]?.source
+            val last = LookUp.searchResult[event.group.id]?.lastReply
+            if (quote != null &&
+                last != null &&
+                quote.ids.contentEquals(last.ids) &&
+                quote.fromId == last.fromId
+            ) {
+                LookUp.searchResult[event.group.id]?.handle(event)
                 return true
+            } else {
+                val reply = DataBase[event.group.id].match(event)
+                if (reply != null) {
+                    event.group.sendMessage(reply)
+                    return true
+                }
             }
         }
         return false
@@ -321,5 +421,6 @@ object ChatBot:Function(true) {
         Forget.unregister()
         LookUp.unregister()
         ChatBot.unregister()
+        LookUp.searchResult.clear()
     }
 }
