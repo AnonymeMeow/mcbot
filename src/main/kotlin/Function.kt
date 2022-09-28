@@ -45,14 +45,13 @@ abstract class Function(var status: Boolean) {
         object Config : SimpleCommand(Mcbot, "mcbot") {
             @Handler
             suspend fun CommandSender.onCommand(vararg args: String) {
-                config.run { forEach { (key, _) -> if (key !in ref) remove(key) } }
                 when (args.size) {
                     0 -> {
-                        sendMessage("Loaded functions:\n" + config.map { "${it.key}:${it.value}" }.joinToString("\n"))
+                        sendMessage("Loaded functions:\n" + ref.map { "${it.key}:${it.value.status}" }.joinToString("\n"))
                     }
                     1 -> {
                         val name = args[0]
-                        if (name in config) {
+                        if (name in ref) {
                             sendMessage("${name}:\n" + ref[name]!!.description + "\nstatus:${config[name]!!}")
                         } else {
                             sendMessage("$name not found.")
@@ -60,7 +59,7 @@ abstract class Function(var status: Boolean) {
                     }
                     2 -> {
                         val name = args[0]
-                        if (name in config) {
+                        if (name in ref) {
                             when (args[1]) {
                                 "on" -> {
                                     if (ref[name]!!.status) {
