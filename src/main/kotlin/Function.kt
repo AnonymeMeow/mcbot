@@ -47,7 +47,8 @@ abstract class Function(var status: Boolean) {
             suspend fun CommandSender.onCommand(vararg args: String) {
                 when (args.size) {
                     0 -> {
-                        sendMessage("Loaded functions:\n" + ref.map { "${it.key}:${it.value.status}" }.joinToString("\n"))
+                        sendMessage("Loaded functions:\n" + ref.map { "${it.key}:${it.value.status}" }
+                            .joinToString("\n"))
                     }
                     1 -> {
                         val name = args[0]
