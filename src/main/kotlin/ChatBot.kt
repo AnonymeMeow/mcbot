@@ -276,9 +276,7 @@ object ChatBot : Function(true) {
                     lastReply =
                         msg.group.sendMessage(buildForwardMessage(msg.group, object : ForwardMessage.DisplayStrategy {
                             override fun generateTitle(forward: RawForwardMessage): String = "${key}的查询结果"
-                            override fun generatePreview(forward: RawForwardMessage): List<String> =
-                                listOf("记得写预览", "多写一点")
-
+                            override fun generatePreview(forward: RawForwardMessage): List<String> = mutableListOf()
                             override fun generateSummary(forward: RawForwardMessage): String =
                                 "#Page:${page}/${(result.size - 1) / messagePerPage}"
 
