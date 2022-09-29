@@ -238,6 +238,7 @@ object ChatBot : Function(true) {
     }
 
     object LookUp : SimpleCommand(Mcbot, "lookup", parentPermission = Mcbot.normalPermission) {
+        const val messagePerPage=20
         data class GroupSearchResult(var page: Int, val forward: Boolean, val result: List<String>, val key: String) {
             var lastReply: MessageSource? = null
             suspend fun handle(msg: GroupMessageEvent) {
@@ -251,7 +252,7 @@ object ChatBot : Function(true) {
                             }
                         }
                         "next" -> {
-                            if (page >= (result.size - 1) / 10) {
+                            if (page >= (result.size - 1) / messagePerPage) {
                                 msg.group.sendMessage(QuoteReply(msg.message) + "Index out of range.")
                                 return
                             } else page++
@@ -259,7 +260,7 @@ object ChatBot : Function(true) {
                         else -> {
                             try {
                                 val set = msg.message.content.toInt()
-                                if (set < 0 || set > (result.size - 1) / 10) {
+                                if (set < 0 || set > (result.size - 1) / messagePerPage) {
                                     msg.group.sendMessage(QuoteReply(msg.message) + "Index out of range.")
                                     return
                                 }
@@ -272,13 +273,6 @@ object ChatBot : Function(true) {
                     }
                 }
                 if (forward) {
-                    var directMessage:Message=QuoteReply(msg.message)
-                    val forwardMessage = mutableMapOf<Int, Message>()
-                    for (index in (page * 10..min(10 * page + 9, result.size - 1))) {
-                        val reply = buildFromCode(result[index], msg.group)
-                        if (reply.contains(Image)) forwardMessage[index] = reply
-                        else directMessage+=PlainText("#${index+1}:")+reply+"\n"
-                    }
                     lastReply =
                         msg.group.sendMessage(buildForwardMessage(msg.group, object : ForwardMessage.DisplayStrategy {
                             override fun generateTitle(forward: RawForwardMessage): String = "记得写标题"
@@ -290,16 +284,15 @@ object ChatBot : Function(true) {
 
                             override fun generateBrief(forward: RawForwardMessage): String = "[查询结果]"
                         }) {
-                            msg.bot says directMessage+"#Page:${page}/${(result.size - 1) / 10}"
-                            for (i in forwardMessage) {
-                                msg.bot says "#${i.key + 1}:"
-                                msg.bot says i.value
+                            for (i in (messagePerPage*page..min(messagePerPage*(page+1)-1,result.size-1))) {
+                                msg.bot says PlainText("#${i+1}:")+buildFromCode(result[i],msg.group)
                             }
+                            msg.bot says "#Page:${page}/${(result.size - 1) / messagePerPage}"
                         }).source
                 } else {
                     lastReply = msg.group.sendMessage(
-                        QuoteReply(msg.message) + result.drop(10 * page).take(10)
-                            .joinToString("\n") + "\n#Page:${page}/${(result.size - 1) / 10}"
+                        QuoteReply(msg.message) + result.drop(messagePerPage * page).take(messagePerPage)
+                            .joinToString("\n") + "\n#Page:${page}/${(result.size - 1) / messagePerPage}"
                     ).source
                 }
             }
