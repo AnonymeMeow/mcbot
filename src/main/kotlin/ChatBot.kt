@@ -275,19 +275,19 @@ object ChatBot : Function(true) {
                 if (forward) {
                     lastReply =
                         msg.group.sendMessage(buildForwardMessage(msg.group, object : ForwardMessage.DisplayStrategy {
-                            override fun generateTitle(forward: RawForwardMessage): String = "记得写标题"
+                            override fun generateTitle(forward: RawForwardMessage): String = "${key}的查询结果"
                             override fun generatePreview(forward: RawForwardMessage): List<String> =
                                 listOf("记得写预览", "多写一点")
 
                             override fun generateSummary(forward: RawForwardMessage): String =
-                                "记得写Summary"
+                                "#Page:${page}/${(result.size - 1) / messagePerPage}"
 
                             override fun generateBrief(forward: RawForwardMessage): String = "[查询结果]"
                         }) {
-                            for (i in (messagePerPage*page..min(messagePerPage*(page+1)-1,result.size-1))) {
-                                msg.bot says PlainText("#${i+1}:")+buildFromCode(result[i],msg.group)
+                            for (i in (messagePerPage*page until min(messagePerPage*(page+1),result.size))) {
+                                msg.bot at i says PlainText("#${i+1}:")+buildFromCode(result[i],msg.group)
                             }
-                            msg.bot says "#Page:${page}/${(result.size - 1) / messagePerPage}"
+                            msg.bot at messagePerPage says "#Page:${page}/${(result.size - 1) / messagePerPage}"
                         }).source
                 } else {
                     lastReply = msg.group.sendMessage(
