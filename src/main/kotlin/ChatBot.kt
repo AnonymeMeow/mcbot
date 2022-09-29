@@ -291,7 +291,7 @@ object ChatBot : Function(true) {
                                     msg.group
                                 )
                             }
-                            msg.bot at time says "#Page:${page}/${(result.size - 1) / messagePerPage}"
+                            msg.bot at currentTime says "#Page:${page}/${(result.size - 1) / messagePerPage}"
                         }).source
                 } else {
                     lastReply = msg.group.sendMessage(
