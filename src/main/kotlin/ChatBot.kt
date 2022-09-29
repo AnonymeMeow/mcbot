@@ -7,6 +7,7 @@ import net.mamoe.mirai.console.command.*
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.register
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.unregister
 import net.mamoe.mirai.console.data.AutoSavePluginConfig
+import net.mamoe.mirai.console.data.AutoSavePluginData
 import net.mamoe.mirai.console.data.value
 import net.mamoe.mirai.contact.Contact.Companion.uploadImage
 import net.mamoe.mirai.contact.Group
@@ -69,6 +70,24 @@ object ChatBot : Function(true) {
         }
     }
 
+    object RefCount : AutoSavePluginData("ChatBot/ReferenceCount") {
+        private val refCount: MutableMap<Long, MutableMap<String, Int>> by value()
+        fun refPlus(groupId: Long, imageId: String) {
+            if (refCount[groupId] == null) refCount[groupId] = mutableMapOf()
+            if (refCount[groupId]!![imageId] == null) refCount[groupId]!![imageId] = 1
+            else refCount[groupId]!![imageId] = refCount[groupId]!![imageId]!! + 1
+        }
+
+        fun refMinus(groupId: Long, imageId: String) {
+            if (refCount[groupId] == null || refCount[groupId]!![imageId] == null) {
+                File(imagePath + "/${groupId}", imageId).delete()
+                return
+            }
+            refCount[groupId]!![imageId] = refCount[groupId]!![imageId]!! - 1
+            if (refCount[groupId]!![imageId]!! == 0) refCount[groupId]!!.remove(imageId)
+        }
+    }
+
     object Remember : SimpleCommand(Mcbot, "remember", parentPermission = Mcbot.normalPermission) {
         @Handler
         suspend fun CommandSender.onCommand(vararg args: String) {
@@ -77,14 +96,11 @@ object ChatBot : Function(true) {
                 if (data.status) {
                     fun pushString(key: String, value: List<String>, inline: Boolean) {
                         val list = if (inline) data.Cn else data.Eq
-                        if (list.contains(key)) {
-                            for (elem in value) {
-                                if (elem !in list[key]!!) {
-                                    list[key]!!.add(elem)
-                                }
+                        if (!list.contains(key)) list[key] = mutableListOf()
+                        for (elem in value) {
+                            if (elem !in list[key]!!) {
+                                list[key]!!.add(elem)
                             }
-                        } else {
-                            list[key] = value.toMutableList()
                         }
                     }
 
@@ -94,27 +110,19 @@ object ChatBot : Function(true) {
                         inline: Boolean
                     ) {
                         val list = if (inline) data.Cn else data.Eq
-                        if (list.contains(key)) {
-                            for (elem in value) {
-                                if (elem.serializeToMiraiCode() !in list[key]!!) {
-                                    list[key]!!.add(elem.serializeToMiraiCode())
-                                    elem.filterIsInstance<Image>().forEach {
-                                        withContext(Dispatchers.IO) {
-                                            val f = File(imagePath + "/${group.id}", it.imageId)
+                        if (!list.contains(key)) list[key] = mutableListOf()
+                        for (elem in value) {
+                            if (elem.serializeToMiraiCode() !in list[key]!!) {
+                                list[key]!!.add(elem.serializeToMiraiCode())
+                                elem.filterIsInstance<Image>().forEach {
+                                    withContext(Dispatchers.IO) {
+                                        val f = File(imagePath + "/${group.id}", it.imageId)
+                                        if (f.exists()) {
+                                            RefCount.refPlus(group.id, it.imageId)
+                                        } else {
                                             f.parentFile.mkdirs()
                                             ImageIO.write(ImageIO.read(URL(it.queryUrl())), it.imageType.name, f)
                                         }
-                                    }
-                                }
-                            }
-                        } else {
-                            list[key] = value.map { it.serializeToMiraiCode() }.toMutableList()
-                            value.forEach {
-                                it.filterIsInstance<Image>().forEach {
-                                    withContext(Dispatchers.IO) {
-                                        val f = File(imagePath + "/${group.id}", it.imageId)
-                                        f.parentFile.mkdirs()
-                                        ImageIO.write(ImageIO.read(URL(it.queryUrl())), it.imageType.name, f)
                                     }
                                 }
                             }
@@ -198,11 +206,7 @@ object ChatBot : Function(true) {
                         fun delFromCode(code: String) {
                             """\[mirai:image:\{[\da-fA-F-]+}\.[a-zA-Z]+]""".toRegex()
                                 .findAll(code).forEach {
-                                    val f = File(
-                                        imagePath + "/${group.id}",
-                                        it.value.removeSurrounding("[mirai:image:", "]")
-                                    )
-                                    if (f.exists()) f.delete()
+                                    RefCount.refMinus(group.id, it.value.removeSurrounding("[mirai:image:", "]"))
                                 }
                         }
 
@@ -247,7 +251,7 @@ object ChatBot : Function(true) {
                             }
                         }
                         "next" -> {
-                            if (page >= (result.size - 1) / 20) {
+                            if (page >= (result.size - 1) / 10) {
                                 msg.group.sendMessage(QuoteReply(msg.message) + "Index out of range.")
                                 return
                             } else page++
@@ -255,7 +259,7 @@ object ChatBot : Function(true) {
                         else -> {
                             try {
                                 val set = msg.message.content.toInt()
-                                if (set < 0 || set > (result.size - 1) / 20) {
+                                if (set < 0 || set > (result.size - 1) / 10) {
                                     msg.group.sendMessage(QuoteReply(msg.message) + "Index out of range.")
                                     return
                                 }
@@ -268,25 +272,34 @@ object ChatBot : Function(true) {
                     }
                 }
                 if (forward) {
+                    var directMessage:Message=QuoteReply(msg.message)
+                    val forwardMessage = mutableMapOf<Int, Message>()
+                    for (index in (page * 10..min(10 * page + 9, result.size - 1))) {
+                        val reply = buildFromCode(result[index], msg.group)
+                        if (reply.contains(Image)) forwardMessage[index] = reply
+                        else directMessage+=PlainText("#${index+1}:")+reply+"\n"
+                    }
                     lastReply =
                         msg.group.sendMessage(buildForwardMessage(msg.group, object : ForwardMessage.DisplayStrategy {
-                            override fun generateTitle(forward: RawForwardMessage): String = "${key}的查询结果"
+                            override fun generateTitle(forward: RawForwardMessage): String = "记得写标题"
                             override fun generatePreview(forward: RawForwardMessage): List<String> =
-                                listOf("共${result.size}条结果", "第${page}页/共${(result.size - 1) / 20}页")
+                                listOf("记得写预览", "多写一点")
 
-                            override fun generateSummary(forward: RawForwardMessage): String = "查询结果"
+                            override fun generateSummary(forward: RawForwardMessage): String =
+                                "记得写Summary"
+
                             override fun generateBrief(forward: RawForwardMessage): String = "[查询结果]"
                         }) {
-                            for (i in (0..min(19, result.size - 20 * page - 1))) {
-                                msg.bot says (i + 1).toString()
-                                msg.bot says buildFromCode(result[20 * page + i], msg.group)
+                            msg.bot says directMessage+"#Page:${page}/${(result.size - 1) / 10}"
+                            for (i in forwardMessage) {
+                                msg.bot says "#${i.key + 1}:"
+                                msg.bot says i.value
                             }
-                            msg.bot says "#Page:${page}/${(result.size - 1) / 20}"
                         }).source
                 } else {
                     lastReply = msg.group.sendMessage(
-                        QuoteReply(msg.message) + result.drop(20 * page).take(20)
-                            .joinToString("\n") + "\n#Page:${page}/${(result.size - 1) / 20}"
+                        QuoteReply(msg.message) + result.drop(10 * page).take(10)
+                            .joinToString("\n") + "\n#Page:${page}/${(result.size - 1) / 10}"
                     ).source
                 }
             }
@@ -327,11 +340,10 @@ object ChatBot : Function(true) {
                             return
                         }
                     } else {
-                        searchResult.remove(group.id)
                         if (result.keys.none { it.contains(key) }) {
                             group.sendMessage(QuoteReply(fromEvent.message) + "Empty.")
-                            searchResult.remove(group.id)
                         } else {
+                            searchResult.remove(group.id)
                             searchResult[group.id] =
                                 GroupSearchResult(0, false, result.keys.filter { it.contains(key) }, key)
                             searchResult[group.id]!!.handle(fromEvent)
@@ -400,6 +412,7 @@ object ChatBot : Function(true) {
 
     init {
         DataBase.reload()
+        RefCount.reload()
         if (status) {
             Remember.register()
             Forget.register()
