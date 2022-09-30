@@ -30,12 +30,10 @@ object ChatBot : Function(true) {
     suspend inline fun buildFromCode(code: String, group: Group) =
         code.deserializeMiraiCode(group).map {
             if (it is Image && !it.isUploaded(group.bot)) {
-                group.uploadImage(
-                    File(
-                        imagePath + "/${group.id}",
-                        it.imageId
-                    )
-                )
+                val f=File(imagePath + "/${group.id}", it.imageId)
+                if (f.exists()) {
+                    group.uploadImage(f)
+                }else PlainText("[图片]")
             } else it
         }.toMessageChain()
 
@@ -43,6 +41,7 @@ object ChatBot : Function(true) {
         @Serializable
         data class GroupData(
             var status: Boolean = true,
+            var messagePerPage: Int = 20,
             val Eq: MutableMap<String, MutableList<String>> = mutableMapOf(),
             val Cn: MutableMap<String, MutableList<String>> = mutableMapOf()
         ) {
@@ -115,6 +114,10 @@ object ChatBot : Function(true) {
                             if (elem.serializeToMiraiCode() !in list[key]!!) {
                                 list[key]!!.add(elem.serializeToMiraiCode())
                                 elem.filterIsInstance<Image>().forEach {
+                                    if (it.imageType == ImageType.UNKNOWN){
+                                        sendMessage("图片下载失败.")
+                                        return@forEach
+                                    }
                                     withContext(Dispatchers.IO) {
                                         val f = File(imagePath + "/${group.id}", it.imageId)
                                         if (f.exists()) {
@@ -238,8 +241,7 @@ object ChatBot : Function(true) {
     }
 
     object LookUp : SimpleCommand(Mcbot, "lookup", parentPermission = Mcbot.normalPermission) {
-        const val messagePerPage=20
-        data class GroupSearchResult(var page: Int, val forward: Boolean, val result: List<String>, val key: String) {
+        data class GroupSearchResult(var page: Int, val inline: Boolean, val forward: Boolean, val result: List<String>, val key: String, val messagePerPage: Int) {
             var lastReply: MessageSource? = null
             suspend fun handle(msg: GroupMessageEvent) {
                 if (lastReply != null) {
@@ -272,27 +274,37 @@ object ChatBot : Function(true) {
                         }
                     }
                 }
-                if (forward) {
-                    lastReply =
-                        msg.group.sendMessage(buildForwardMessage(msg.group, object : ForwardMessage.DisplayStrategy {
-                            override fun generateTitle(forward: RawForwardMessage): String = "${key}的查询结果"
-                            override fun generatePreview(forward: RawForwardMessage): List<String> =
-                                listOf("共${result.size}条结果")
+                if (inline) {
+                    if (forward) {
+                        lastReply =
+                            msg.group.sendMessage(buildForwardMessage(
+                                msg.group,
+                                object : ForwardMessage.DisplayStrategy {
+                                    override fun generateTitle(forward: RawForwardMessage): String = "${key}的查询结果"
+                                    override fun generatePreview(forward: RawForwardMessage): List<String> =
+                                        listOf("共${result.size}条结果")
 
-                            override fun generateSummary(forward: RawForwardMessage): String =
-                                "#Page:${page}/${(result.size - 1) / messagePerPage}"
+                                    override fun generateSummary(forward: RawForwardMessage): String =
+                                        "#Page:${page}/${(result.size - 1) / 100}"
 
-                            override fun generateBrief(forward: RawForwardMessage): String = "[查询结果]"
-                        }) {
-                            val time = currentTime - messagePerPage
-                            for (i in (messagePerPage*page until min(messagePerPage*(page+1),result.size))) {
-                                msg.bot at time + i % messagePerPage says PlainText("#${i + 1}:") + buildFromCode(
-                                    result[i],
-                                    msg.group
-                                )
-                            }
-                            msg.bot at currentTime says "#Page:${page}/${(result.size - 1) / messagePerPage}"
-                        }).source
+                                    override fun generateBrief(forward: RawForwardMessage): String = "[查询结果]"
+                                }) {
+                                val time = currentTime - 100
+                                for (i in (100 * page until min(100 * (page + 1), result.size))) {
+                                    msg.bot at time + i % 100 says PlainText("#${i + 1}:") + buildFromCode(
+                                        result[i],
+                                        msg.group
+                                    )
+                                }
+                            }).source
+                    }else{
+                        var reply: Message = QuoteReply(msg.message)
+                        for (i in (messagePerPage * page until min(messagePerPage * (page + 1), result.size))) {
+                            reply += PlainText("#${i + 1}:") + buildFromCode(result[i], msg.group) + "\n"
+                        }
+                        lastReply =
+                            msg.group.sendMessage(reply + "#Page:${page}/${(result.size - 1) / messagePerPage}").source
+                    }
                 } else {
                     lastReply = msg.group.sendMessage(
                         QuoteReply(msg.message) + result.drop(messagePerPage * page).take(messagePerPage)
@@ -311,7 +323,9 @@ object ChatBot : Function(true) {
                 if (data.status) {
                     val param = mutableMapOf(
                         'i' to false,
-                        'k' to false
+                        'k' to false,
+                        'f' to false,
+                        'n' to false
                     )
                     val key: String
                     if (args.isEmpty()) key = ""
@@ -326,11 +340,20 @@ object ChatBot : Function(true) {
                         }
                         key = if (args.size > 1) args[1] else ""
                     } else key = args[0]
+                    if (param['n']!!){
+                        try {
+                            DataBase[group.id].messagePerPage = key.toInt()
+                            sendMessage("Done.")
+                        }catch (e:Exception){
+                            sendMessage(e.message?:"Internal error.")
+                        }
+                        return
+                    }
                     val result = if (param['i']!!) data.Cn else data.Eq
                     if (param['k']!!) {
                         if (result.contains(key)) {
                             searchResult.remove(group.id)
-                            searchResult[group.id] = GroupSearchResult(0, true, result[key]!!, key)
+                            searchResult[group.id] = GroupSearchResult(0, true, param['f']!!, result[key]!!, key, DataBase[group.id].messagePerPage)
                             searchResult[group.id]!!.handle(fromEvent)
                         } else {
                             group.sendMessage(QuoteReply(fromEvent.message) + "$key not found.")
@@ -342,7 +365,7 @@ object ChatBot : Function(true) {
                         } else {
                             searchResult.remove(group.id)
                             searchResult[group.id] =
-                                GroupSearchResult(0, false, result.keys.filter { it.contains(key) }, key)
+                                GroupSearchResult(0, false, param['f']!!, result.keys.filter { it.contains(key) }, key, DataBase[group.id].messagePerPage)
                             searchResult[group.id]!!.handle(fromEvent)
                         }
                     }
