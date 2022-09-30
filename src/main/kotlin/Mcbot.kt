@@ -17,7 +17,6 @@ object Mcbot : KotlinPlugin(JvmPluginDescription(id = "mcbot.Mcbot", name = "Mcb
         arrayOf(
             Recall,
             Hitokoto,
-            McServer,
             ChatBot,
             Repeater
         )

@@ -7,7 +7,6 @@
 - 撤回（[Recall](#撤回)）
 - 自动回复（[ChatBot](#自动回复)）
 - 复读（[Repeater](#复读)）
-- 与Minecraft服务器通讯（未完成）（[McServer](#McServer)）
 
 ## 基本功能
 
@@ -50,9 +49,10 @@ owner: ${your QQ number}
 
 - `/remember [-i] <keyword> [reply...]`:记住指定关键词的回复，其中-i选项表示关键词为文本中匹配，若回复为空，则bot会等待命令发起人的下一消息，若其满足回复[消息类型](#ReplyType)要求则将其放入回复列表，若为转发消息则将其内满足回复[消息类型](#ReplyType)要求的回复全放入回复列表，若前者均不满足则跳过此次命令，直接到完成阶段（Done.）。
 - `/forget [-ik] <keyword> [index...]`:忘记某一关键词或指定回复，其中-i选项代表关键词为文本中匹配关键词，-k选项表示忘记该关键词的所有回复。该指令用index来指代回复，因为可能会存在图片等无法用纯文本指代的回复。
-- `/lookup [-ik] <keyword>`:查询关键词或回复，其中-k选项代表查询指定关键词的所有回复，-i代表查询文本中匹配的关键词。回复查询结果“next”，“prev”或页码可以完成翻页。
+- `/lookup [-ikf] <keyword>`:查询关键词或回复，其中-k选项代表查询指定关键词的所有回复，-i代表查询文本中匹配的关键词。回复查询结果“next”，“prev”或页码可以完成翻页。-f在有-k参数的情况下可以以转发消息的形式回复，防止刷屏。
+- `/lookup -n number`:将每一页的消息数量设为number，此标签会覆盖ikf标签。
 
-可能存在的问题：bot的图片储存模块是通过图片id识别图片的，若一张图同时出现在多个回复里面，删除其中一个回复时会删除该图片从而导致其他回复无法获取此图片。将来可能会加入引用计数功能防止此现象出现。
+可能存在的问题：部分情况下可能会出现图片下载失败的情况，特别是在文字和图片同时出现时，参考issue:<https://github.com/mamoe/mirai/issues/1073>.
 
 ## [复读](src/main/kotlin/Repeater.kt)
 
@@ -61,7 +61,3 @@ owner: ${your QQ number}
 - `/repeat <on/off>`:开启/关闭本群复读
 - `/repeat threshold [threshold]`:查询或设置本群复读阈值
 - `/repeat probability [probability]`:查询或设置本群复读概率
-
-## <a id = "McServer">[与Minecraft服务器通讯（未完成）](src/main/kotlin/McServer.kt)</a>
-
-本bot的本意，与[mcbot-mcside](https://github.com/Zhu-Aemon/mcbot-mcside)一起使用，目前只完成了连接到服务器以及互相转发消息的功能，socket协议以及转发事件等功能正在筹划中。此功能默认处于关闭状态。
