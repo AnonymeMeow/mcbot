@@ -41,6 +41,7 @@ object Mcbot : KotlinPlugin(JvmPluginDescription(id = "mcbot.Mcbot", name = "Mcb
     override fun onEnable() {
         Function.reload()
         Function.Companion.Config.register()
+        funcList.forEach { it.load() }
         AbstractPermitteeId.parseFromString("u${Function.owner}").permit(parentPermission)
         AbstractPermitteeId.AnyUser.permit(normalPermission)
         globalEventChannel().subscribeAlways<Event> {

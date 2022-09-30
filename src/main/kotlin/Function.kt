@@ -12,7 +12,10 @@ import net.mamoe.mirai.event.Event
 
 @Suppress("LeakingThis", "unused")
 abstract class Function(var status: Boolean) {
-    init {
+
+    open val description = "Mcbot function."
+
+    open fun load() {
         val name = this::class.simpleName!!
         if (name !in config) {
             config[name] = status
@@ -21,8 +24,6 @@ abstract class Function(var status: Boolean) {
         }
         ref[name] = this
     }
-
-    open val description = "Mcbot function."
 
     open fun unload() {}
     open fun enable() {

@@ -30,10 +30,10 @@ object ChatBot : Function(true) {
     suspend inline fun buildFromCode(code: String, group: Group) =
         code.deserializeMiraiCode(group).map {
             if (it is Image && !it.isUploaded(group.bot)) {
-                val f=File(imagePath + "/${group.id}", it.imageId)
+                val f = File(imagePath + "/${group.id}", it.imageId)
                 if (f.exists()) {
                     group.uploadImage(f)
-                }else PlainText("[图片]")
+                } else PlainText("[图片]")
             } else it
         }.toMessageChain()
 
@@ -114,7 +114,7 @@ object ChatBot : Function(true) {
                             if (elem.serializeToMiraiCode() !in list[key]!!) {
                                 list[key]!!.add(elem.serializeToMiraiCode())
                                 elem.filterIsInstance<Image>().forEach {
-                                    if (it.imageType == ImageType.UNKNOWN){
+                                    if (it.imageType == ImageType.UNKNOWN) {
                                         sendMessage("图片下载失败.")
                                         return@forEach
                                     }
@@ -241,7 +241,14 @@ object ChatBot : Function(true) {
     }
 
     object LookUp : SimpleCommand(Mcbot, "lookup", parentPermission = Mcbot.normalPermission) {
-        data class GroupSearchResult(var page: Int, val inline: Boolean, val forward: Boolean, val result: List<String>, val key: String, val messagePerPage: Int) {
+        data class GroupSearchResult(
+            var page: Int,
+            val inline: Boolean,
+            val forward: Boolean,
+            val result: List<String>,
+            val key: String,
+            val messagePerPage: Int
+        ) {
             var lastReply: MessageSource? = null
             suspend fun handle(msg: GroupMessageEvent) {
                 if (lastReply != null) {
@@ -297,18 +304,21 @@ object ChatBot : Function(true) {
                                     )
                                 }
                             }).source
-                    }else{
+                    } else {
                         var reply: Message = QuoteReply(msg.message)
                         for (i in (messagePerPage * page until min(messagePerPage * (page + 1), result.size))) {
-                            reply += PlainText("${if (i % messagePerPage == 0) "" else "\n"}#${i + 1}:") + buildFromCode(result[i], msg.group)
+                            reply += PlainText("${if (i % messagePerPage == 0) "" else "\n"}#${i + 1}:") + buildFromCode(
+                                result[i],
+                                msg.group
+                            )
                         }
                         lastReply =
-                            msg.group.sendMessage(reply + if (result.size>messagePerPage) "\n#Page:${page}/${(result.size - 1) / messagePerPage}" else "").source
+                            msg.group.sendMessage(reply + if (result.size > messagePerPage) "\n#Page:${page}/${(result.size - 1) / messagePerPage}" else "").source
                     }
                 } else {
                     lastReply = msg.group.sendMessage(
                         QuoteReply(msg.message) + result.drop(messagePerPage * page).take(messagePerPage)
-                            .joinToString("\n") + if (result.size>messagePerPage) "\n#Page:${page}/${(result.size - 1) / messagePerPage}" else ""
+                            .joinToString("\n") + if (result.size > messagePerPage) "\n#Page:${page}/${(result.size - 1) / messagePerPage}" else ""
                     ).source
                 }
             }
@@ -340,12 +350,12 @@ object ChatBot : Function(true) {
                         }
                         key = if (args.size > 1) args[1] else ""
                     } else key = args[0]
-                    if (param['n']!!){
+                    if (param['n']!!) {
                         try {
                             DataBase[group.id].messagePerPage = key.toInt()
                             sendMessage("Done.")
-                        }catch (e:Exception){
-                            sendMessage(e.message?:"Internal error.")
+                        } catch (e: Exception) {
+                            sendMessage(e.message ?: "Internal error.")
                         }
                         return
                     }
@@ -353,7 +363,14 @@ object ChatBot : Function(true) {
                     if (param['k']!!) {
                         if (result.contains(key)) {
                             searchResult.remove(group.id)
-                            searchResult[group.id] = GroupSearchResult(0, true, param['f']!!, result[key]!!, key, DataBase[group.id].messagePerPage)
+                            searchResult[group.id] = GroupSearchResult(
+                                0,
+                                true,
+                                param['f']!!,
+                                result[key]!!,
+                                key,
+                                DataBase[group.id].messagePerPage
+                            )
                             searchResult[group.id]!!.handle(fromEvent)
                         } else {
                             group.sendMessage(QuoteReply(fromEvent.message) + "$key not found.")
@@ -365,7 +382,14 @@ object ChatBot : Function(true) {
                         } else {
                             searchResult.remove(group.id)
                             searchResult[group.id] =
-                                GroupSearchResult(0, false, param['f']!!, result.keys.filter { it.contains(key) }, key, DataBase[group.id].messagePerPage)
+                                GroupSearchResult(
+                                    0,
+                                    false,
+                                    param['f']!!,
+                                    result.keys.filter { it.contains(key) },
+                                    key,
+                                    DataBase[group.id].messagePerPage
+                                )
                             searchResult[group.id]!!.handle(fromEvent)
                         }
                     }
@@ -430,7 +454,8 @@ object ChatBot : Function(true) {
         return false
     }
 
-    init {
+    override fun load() {
+        super.load()
         DataBase.reload()
         RefCount.reload()
         if (status) {

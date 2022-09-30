@@ -148,7 +148,8 @@ object Repeater : Function(true) {
         return false
     }
 
-    init {
+    override fun load() {
+        super.load()
         RepeaterConfig.reload()
         if (status) RepeaterConfig.RepeaterCommand.register()
     }
