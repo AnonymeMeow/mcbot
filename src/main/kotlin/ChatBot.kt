@@ -300,15 +300,15 @@ object ChatBot : Function(true) {
                     }else{
                         var reply: Message = QuoteReply(msg.message)
                         for (i in (messagePerPage * page until min(messagePerPage * (page + 1), result.size))) {
-                            reply += PlainText("#${i + 1}:") + buildFromCode(result[i], msg.group) + "\n"
+                            reply += PlainText("${if (i % messagePerPage == 0) "" else "\n"}#${i + 1}:") + buildFromCode(result[i], msg.group)
                         }
                         lastReply =
-                            msg.group.sendMessage(reply + "#Page:${page}/${(result.size - 1) / messagePerPage}").source
+                            msg.group.sendMessage(reply + if (result.size>messagePerPage) "\n#Page:${page}/${(result.size - 1) / messagePerPage}" else "").source
                     }
                 } else {
                     lastReply = msg.group.sendMessage(
                         QuoteReply(msg.message) + result.drop(messagePerPage * page).take(messagePerPage)
-                            .joinToString("\n") + "\n#Page:${page}/${(result.size - 1) / messagePerPage}"
+                            .joinToString("\n") + if (result.size>messagePerPage) "\n#Page:${page}/${(result.size - 1) / messagePerPage}" else ""
                     ).source
                 }
             }
