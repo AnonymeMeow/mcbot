@@ -69,7 +69,7 @@ object ChatBot : Function(true) {
         }
     }
 
-    object RefCount : AutoSavePluginData("ChatBot/ReferenceCount") {
+    object RefCount : AutoSavePluginData("ReferenceCount") {
         private val refCount: MutableMap<Long, MutableMap<String, Int>> by value()
         fun refPlus(groupId: Long, imageId: String) {
             if (refCount[groupId] == null) refCount[groupId] = mutableMapOf()

@@ -15,6 +15,7 @@ import net.mamoe.mirai.event.globalEventChannel
 object Mcbot : KotlinPlugin(JvmPluginDescription(id = "mcbot.Mcbot", name = "Mcbot", version = "0.1.0")) {
     private val funcList by lazy {
         arrayOf(
+            McServer,
             Recall,
             Hitokoto,
             ChatBot,

@@ -42,25 +42,17 @@ object McServer:Function(true) {
             socket = Socket(ip.first, ip.second)
             socket.keepAlive = true
             bufferedReader = BufferedReader(InputStreamReader(socket.getInputStream()))
-            printWriter = PrintWriter(socket.getOutputStream())
+            printWriter = PrintWriter(socket.getOutputStream(),true)
             thread = object : Thread() {
                 override fun run() {
                     var receive: String
                     synchronized(printWriter) {
-                        printWriter.println("Connect")
-                        printWriter.println(socket.localAddress.hostAddress)
-                    }
-                    receive = bufferedReader.readLine()
-                    if (receive != "Accepted") {
-                        receive = bufferedReader.readLine()
-                        this@GroupConnection.close(true)
-                        Mcbot.launch { group.sendMessage("Failed to connect to server ${ip.first}:${ip.second}, error:${receive}.") }
-                        throw Throwable(receive)
+                        printWriter.println("McbotConnectionRequest")
                     }
                     while (true) {
                         receive = bufferedReader.readLine()
                         when (receive) {
-                            "MessageEvent" -> {
+                            "Message" -> {
                                 receive = bufferedReader.readLine()
                                 Mcbot.launch { group.sendMessage(receive) }
                             }
@@ -163,7 +155,8 @@ object McServer:Function(true) {
         }
     }
 
-    init {
+    override fun load(){
+        super.load()
         McServerIP.reload()
         if (status) ConnectionManager.register()
     }

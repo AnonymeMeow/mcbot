@@ -10,7 +10,7 @@ import net.mamoe.mirai.console.permission.PermissionService.Companion.cancel
 import net.mamoe.mirai.console.permission.PermissionService.Companion.permit
 import net.mamoe.mirai.event.Event
 
-@Suppress("LeakingThis", "unused")
+@Suppress("unused")
 abstract class Function(var status: Boolean) {
 
     open val description = "Mcbot function."
