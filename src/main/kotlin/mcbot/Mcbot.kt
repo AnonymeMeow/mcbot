@@ -1,19 +1,23 @@
 package mcbot
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import mcbot.Mcbot.reload
 import net.mamoe.mirai.console.command.*
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.register
 import net.mamoe.mirai.console.command.CommandManager.INSTANCE.unregister
 import net.mamoe.mirai.console.data.AutoSavePluginConfig
 import net.mamoe.mirai.console.data.AutoSavePluginData
 import net.mamoe.mirai.console.data.value
+import net.mamoe.mirai.console.permission.AbstractPermitteeId
+import net.mamoe.mirai.console.permission.PermissionService.Companion.permit
+import net.mamoe.mirai.console.plugin.jvm.JvmPluginDescription
+import net.mamoe.mirai.console.plugin.jvm.KotlinPlugin
 import net.mamoe.mirai.contact.Contact.Companion.uploadImage
 import net.mamoe.mirai.contact.Group
-import net.mamoe.mirai.event.Event
 import net.mamoe.mirai.event.GlobalEventChannel
 import net.mamoe.mirai.event.events.GroupMessageEvent
+import net.mamoe.mirai.event.globalEventChannel
 import net.mamoe.mirai.event.nextEvent
 import net.mamoe.mirai.message.code.MiraiCode.deserializeMiraiCode
 import net.mamoe.mirai.message.data.*
@@ -21,11 +25,9 @@ import net.mamoe.mirai.message.data.Image.Key.isUploaded
 import net.mamoe.mirai.message.data.Image.Key.queryUrl
 import java.io.File
 import java.net.URL
-import javax.imageio.ImageIO
 import kotlin.math.min
 
-@Suppress("unused")
-object ChatBot : Function(true) {
+object Mcbot : KotlinPlugin(JvmPluginDescription(id = "mcbot.Mcbot", name = "Mcbot", version = "0.1.0")) {
     val imagePath = Mcbot.dataFolderPath.toString() + "/ChatBot"
     suspend inline fun buildFromCode(code: String, group: Group) =
         code.deserializeMiraiCode(group).map {
@@ -87,7 +89,7 @@ object ChatBot : Function(true) {
         }
     }
 
-    object Remember : SimpleCommand(Mcbot, "remember", parentPermission = Mcbot.normalPermission) {
+    object Remember : SimpleCommand(Mcbot, "remember") {
         @Handler
         suspend fun CommandSender.onCommand(vararg args: String) {
             if (this is MemberCommandSenderOnMessage && fromEvent.message.all { it is PlainText || it !is MessageContent }) {
@@ -124,7 +126,7 @@ object ChatBot : Function(true) {
                                             RefCount.refPlus(group.id, it.imageId)
                                         } else {
                                             f.parentFile.mkdirs()
-                                            ImageIO.write(ImageIO.read(URL(it.queryUrl())), it.imageType.name, f)
+                                            f.writeBytes(URL(it.queryUrl()).openStream().readBytes())
                                         }
                                     }
                                 }
@@ -168,7 +170,7 @@ object ChatBot : Function(true) {
         }
     }
 
-    object Forget : SimpleCommand(Mcbot, "forget", parentPermission = Mcbot.adminPermission) {
+    object Forget : SimpleCommand(Mcbot, "forget") {
         @Handler
         suspend fun CommandSender.onCommand(vararg args: String) {
             if (this is MemberCommandSenderOnMessage && fromEvent.message.all { it is PlainText || it !is MessageContent }) {
@@ -240,7 +242,7 @@ object ChatBot : Function(true) {
         }
     }
 
-    object LookUp : SimpleCommand(Mcbot, "lookup", parentPermission = Mcbot.normalPermission) {
+    object LookUp : SimpleCommand(Mcbot, "lookup") {
         data class GroupSearchResult(
             var page: Int,
             val inline: Boolean,
@@ -398,7 +400,7 @@ object ChatBot : Function(true) {
         }
     }
 
-    object ChatBot : CompositeCommand(Mcbot, "chatbot", parentPermission = Mcbot.adminPermission) {
+    object ChatBot : CompositeCommand(Mcbot, "chatbot") {
         @SubCommand
         suspend fun CommandSender.on() {
             if (this is MemberCommandSenderOnMessage) {
@@ -406,7 +408,7 @@ object ChatBot : Function(true) {
                 if (data.status) {
                     group.sendMessage("自动回复已经是开启状态")
                 } else {
-                    data.status = false
+                    data.status = true
                     group.sendMessage("自动回复已开启")
                 }
             }
@@ -426,69 +428,42 @@ object ChatBot : Function(true) {
         }
     }
 
-    private val mute = listOf("Recall", "Hitokoto")
-    override suspend operator fun invoke(event: Event, list: MutableMap<String, Deferred<Boolean>>): Boolean {
-        if (status &&
-            event is GroupMessageEvent &&
-            DataBase[event.group.id].status &&
-            !mute.map { list[it] ?: Mcbot.async { false } }.awaitAll().any { it } &&
-            !event.message.content.startsWith(CommandManager.commandPrefix)
-        ) {
-            val quote = event.message[QuoteReply]?.source
-            val last = LookUp.searchResult[event.group.id]?.lastReply
-            if (quote != null &&
-                last != null &&
-                quote.ids.contentEquals(last.ids) &&
-                quote.fromId == last.fromId
-            ) {
-                LookUp.searchResult[event.group.id]?.handle(event)
-                return true
-            } else {
-                val reply = DataBase[event.group.id].match(event)
-                if (reply != null) {
-                    event.group.sendMessage(reply)
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    override fun load() {
-        super.load()
+    override fun onEnable() {
         DataBase.reload()
         RefCount.reload()
-        if (status) {
-            Remember.register()
-            Forget.register()
-            LookUp.register()
-            ChatBot.register()
-        }
-    }
-
-    override fun unload() {
-        if (status) {
-            Remember.unregister()
-            Forget.unregister()
-            LookUp.unregister()
-            ChatBot.unregister()
-        }
-    }
-
-    override fun enable() {
-        super.enable()
         Remember.register()
         Forget.register()
         LookUp.register()
         ChatBot.register()
+        AbstractPermitteeId.AnyUser.permit(parentPermission)
+        globalEventChannel().subscribeAlways<GroupMessageEvent> {
+            if (DataBase[group.id].status &&
+                !message.content.startsWith(CommandManager.commandPrefix)
+            ) {
+                val quote = message[QuoteReply]?.source
+                val last = LookUp.searchResult[group.id]?.lastReply
+                if (quote != null &&
+                    last != null &&
+                    quote.ids.contentEquals(last.ids) &&
+                    quote.fromId == last.fromId
+                ) {
+                    LookUp.searchResult[group.id]?.handle(this)
+                } else {
+                    val reply = DataBase[group.id].match(this)
+                    if (reply != null) {
+                        group.sendMessage(reply)
+                    }
+                }
+            }
+        }
+        logger.info("Mcbot enabled")
     }
 
-    override fun disable() {
-        super.disable()
+    override fun onDisable() {
         Remember.unregister()
         Forget.unregister()
         LookUp.unregister()
         ChatBot.unregister()
-        LookUp.searchResult.clear()
+        logger.info("Mcbot disabled")
     }
 }
